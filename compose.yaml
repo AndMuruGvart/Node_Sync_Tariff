@@ -1,0 +1,87 @@
+# provide a name if you wish
+# name: btlz-test
+
+networks:
+    postgres-net:
+        driver: bridge
+
+volumes:
+    postgres-vol:
+        driver: local
+
+services:
+    postgres:
+        container_name: postgres
+
+        image: postgres:16.1-alpine
+
+        environment:
+            - PGPORT=${POSTGRES_PORT:-5432}
+            - POSTGRES_DB=${POSTGRES_DB:-postgres}
+            - POSTGRES_USER=${POSTGRES_USER:-postgres}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+            - PGDATA=/var/lib/postgresql/data/pgdata
+
+        volumes:
+            - postgres-vol:/var/lib/postgresql/data
+
+        networks:
+            - postgres-net
+
+        expose:
+            - ${POSTGRES_PORT:-5432}
+
+        ports:
+            - ${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}
+
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+        restart: unless-stopped
+
+    app:
+        container_name: app
+
+        build:
+            context: .
+            dockerfile: Dockerfile
+
+        environment:
+            POSTGRES_HOST: postgres
+            POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+            POSTGRES_DB: ${POSTGRES_DB:-postgres}
+            POSTGRES_USER: ${POSTGRES_USER:-postgres}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+            APP_PORT: ${APP_PORT:-5000}
+            NODE_ENV: production
+            WB_API_URL: ${WB_API_URL:-https://common-api.wildberries.ru/api/v1/tariffs/box}
+            WB_API_TOKEN: ${WB_API_TOKEN:-}
+            WB_POLL_INTERVAL_MINUTES: ${WB_POLL_INTERVAL_MINUTES:-60}
+            GOOGLE_SYNC_INTERVAL_MINUTES: ${GOOGLE_SYNC_INTERVAL_MINUTES:-60}
+            GOOGLE_SHEET_NAME: ${GOOGLE_SHEET_NAME:-stocks_coefs}
+            GOOGLE_SYNC_ENABLED: ${GOOGLE_SYNC_ENABLED:-true}
+            GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+            GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ${GOOGLE_SERVICE_ACCOUNT_KEY_FILE:-}
+            INITIAL_SPREADSHEET_IDS: ${INITIAL_SPREADSHEET_IDS:-}
+
+        ports:
+            - ${APP_PORT:-5000}:${APP_PORT:-5000}
+
+        depends_on:
+            postgres:
+                condition: service_healthy
+        networks:
+            - postgres-net
+
+        logging:
+            driver: json-file
+            options:
+                max-size: 10m
+                max-file: 5
+
+        command: ["npm", "run", "start"]
+        restart: unless-stopped
